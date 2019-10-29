@@ -1,0 +1,295 @@
+---
+title: "ETL"
+output: html_document
+---
+
+# ETL process to get Corruption Perception Index by sources and year
+
+##Download datasets from website and import
+Datasets are downloaded from Transparency International's website.
+There is one Excel file per year. 
+
+```{r,warning=FALSE,message=FALSE}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(reshape)
+library(here)
+
+# Data import
+cpi_2012 <- read_excel(here("data","CPI2012_Results.xlsx"), sheet = "CPI 2012")
+cpi_2013 <- read_excel(here("data","CPI2013_Results.xlsx"), sheet = "CPI 2013")
+cpi_2014 <- read_excel(here("data","CPI 2014_FullDataSet.xlsx"), sheet = "CPI 2014")
+cpi_2015 <- read_excel(here("data","CPI_2015_FullDataSet.xlsx"), sheet = "CPI 2015")
+cpi_2016 <- read_excel(here("data","CPI2016.xlsx"), sheet = "CPI_2016")
+cpi_2017_america <- read_excel(here("data","CPI2017_Full_DataSet_.xlsx"), sheet = "Americas", skip = 2)
+cpi_2017_asia_pacific <- read_excel(here("data","CPI2017_Full_DataSet_.xlsx"), sheet = "Asia & the Pacific", skip = 2)
+cpi_2017_eastern_europe <- read_excel(here("data","CPI2017_Full_DataSet_.xlsx"), sheet = "Eastern Europe & Central Asia", skip = 2)
+cpi_2017_western_europe <- read_excel(here("data","CPI2017_Full_DataSet_.xlsx"), sheet = "Western Europe", skip = 2)
+cpi_2017_MENA <- read_excel(here("data","CPI2017_Full_DataSet_.xlsx"), sheet = "MENA", skip = 2)
+cpi_2017_SubS_Africa <- read_excel(here("data","CPI2017_Full_DataSet_.xlsx"), sheet = "Sub-Saharan Africa", skip = 2)
+cpi_2017_african_union <- read_excel(here("data","CPI2017_Full_DataSet_.xlsx"), sheet = "African Union", skip = 2)
+cpi_2017_arab_states <- read_excel(here("data","CPI2017_Full_DataSet_.xlsx"), sheet = "Arab States", skip = 2)
+cpi_2018 <- read_excel(here("data","2018_CPI_FullDataSet.xlsx"), sheet = "CPI2018", skip = 2)
+```
+### Table with country and Region
+```{r}
+country_region <- cpi_2018[c('Country','Region')]
+```
+
+
+## 2017 dataset unification
+Data for 2017 is separated by region in different sheets. All the sheets were downloaded separetly.
+All the data is unified so that it only one dataset for 2017.
+
+```{r}
+# Find differences in column names
+dif <- setdiff(names(cpi_2017_african_union),names(cpi_2017_arab_states))
+
+# Rename columns in Arab States dataset to match the rest of datasets
+names(cpi_2017_arab_states)[3]<-"CPI Score 2017"
+names(cpi_2017_arab_states)[4]<-"Rank 2017"
+names(cpi_2017_arab_states)[5]<-"Standard error 2017"
+names(cpi_2017_arab_states)[8]<-"Sources"
+
+# list all dataframes of 2017
+list_df <- mget(ls(pattern = "2017"))
+
+# append 2017 dataframes
+cpi_2017 <- do.call("rbind", list_df)
+
+# remove nulls
+cpi_2017 <- cpi_2017[rowSums(is.na(cpi_2017)) != ncol(cpi_2017),]
+
+# remove duplicates
+cpi_2017<- cpi_2017[!duplicated(cpi_2017$Country), ]
+
+# delete all datasets of 2017 by region
+rm(cpi_2017_african_union,cpi_2017_america,cpi_2017_arab_states,cpi_2017_asia_pacific,cpi_2017_eastern_europe,cpi_2017_SubS_Africa,cpi_2017_MENA,cpi_2017_western_europe)
+```
+
+
+## Add column with year
+Add a column to identify the year
+
+```{r}
+cpi_2012 <- cpi_2012 %>% rowwise() %>% mutate(year = 2012)
+cpi_2012 <- cpi_2012 %>%select(year, everything())
+cpi_2013 <- cpi_2013 %>% rowwise() %>% mutate(year = 2013)
+cpi_2013 <- cpi_2013 %>%select(year, everything())
+cpi_2014 <- cpi_2014 %>% rowwise() %>% mutate(year = 2014)
+cpi_2014 <- cpi_2014 %>%select(year, everything())
+cpi_2015 <- cpi_2015 %>% rowwise() %>% mutate(year = 2015)
+cpi_2015 <- cpi_2015 %>%select(year, everything())
+cpi_2016 <- cpi_2016 %>% rowwise() %>% mutate(year = 2016)
+cpi_2016 <- cpi_2016 %>%select(year, everything())
+cpi_2017 <- cpi_2017 %>% rowwise() %>% mutate(year = 2017)
+cpi_2017 <- cpi_2017 %>%select(year, everything())
+cpi_2018 <- cpi_2018 %>% rowwise() %>% mutate(year = 2018)
+cpi_2018 <- cpi_2018 %>%select(year, everything())
+```
+
+# Normalize column names
+The names of the sources change from year to year, for example in 2012 '' is named as 'BF(SGI)'. 
+Before appending all dataframes it is necesary to normalize columnames. The names from 2018 will be taken as correct name.  
+
+```{r}
+# 2018 
+names(cpi_2018)[5] <-'CPI Score'
+
+cpi_2018['Standard error'] <- NULL
+cpi_2018['Region'] <- NULL
+cpi_2018['ISO3'] <- NULL
+cpi_2018['Rank'] <- NULL
+cpi_2018['Number of sources'] <- NULL
+cpi_2018['Upper CI'] <- NULL
+cpi_2018['Lower CI'] <- NULL
+
+# 2017 
+names(cpi_2017)[4]<-"CPI Score"
+
+cpi_2017['ISO3'] <- NULL
+cpi_2017['Standard error 2017'] <- NULL
+cpi_2017['Rank 2017'] <- NULL
+cpi_2017['Sources'] <- NULL
+cpi_2017['Upper CI 2017'] <- NULL
+cpi_2017['Lower CI 2017'] <- NULL
+
+# 2016 
+names(cpi_2016)[3]<-"CPI Score"
+
+cpi_2016['Rank'] <- NULL
+cpi_2016['...19'] <- NULL
+cpi_2016['Region'] <- NULL
+cpi_2016['WB Code'] <- NULL
+
+colnames(cpi_2016)[which(names(cpi_2016) == "Varities of Democracy Project")] <- "Varieties of Democracy Project"
+
+#2015
+names(cpi_2015)[6]<-"CPI Score"
+names(cpi_2015)[3]<-"Country"
+
+cpi_2015['Country Rank'] <- NULL
+cpi_2015['Country Code'] <- NULL
+cpi_2015['Region'] <- NULL
+cpi_2015['Std Error'] <- NULL
+cpi_2015['Number of Surveys Used'] <- NULL
+cpi_2015['Min'] <- NULL
+cpi_2015['Max'] <- NULL
+cpi_2015['90% Lower CI'] <- NULL
+cpi_2015['90%Upper CI'] <- NULL
+
+colnames(cpi_2015)[which(names(cpi_2015) == "Arican Development Bank")] <- "African Development Bank CPIA"
+colnames(cpi_2015)[which(names(cpi_2015) == "Bertelsmann  Foundation TI")] <- "Bertelsmann Foundation Transformation Index"
+colnames(cpi_2015)[which(names(cpi_2015) == "Freedom House NIT")] <- "Freedom House Nations in Transit Ratings"
+colnames(cpi_2015)[which(names(cpi_2015) == "IMD World Competitiveness Yearbook")] <- "IMD World Competitiveness Year Book"
+colnames(cpi_2015)[which(names(cpi_2015) == "World  Economic Forum EOS")] <- "World Economic Forum EOS"
+colnames(cpi_2015)[which(names(cpi_2015) == "Bertelsmann Foundation SGI")] <- "Bertelsmann Foundation Sustainable Governance Index"
+colnames(cpi_2015)[which(names(cpi_2015) == "Economist Intelligence Unit")] <- "Economist Intelligence Unit Country Ratings"
+colnames(cpi_2015)[which(names(cpi_2015) == "IHS Global Insight")] <- "Global Insight Country Risk Ratings"
+colnames(cpi_2015)[which(names(cpi_2015) == "PRS Internationl Country Risk Guide")] <- "PRS International Country Risk Guide"
+colnames(cpi_2015)[which(names(cpi_2015) == "World Justice Project ROL")] <- "World Justice Project Rule of Law Index"
+colnames(cpi_2015)[which(names(cpi_2015) == "IMD World Competitiveness Year Book")] <- "IMD World Competitiveness Yearbook"
+
+#2014
+names(cpi_2014)[6]<-"CPI Score"
+names(cpi_2014)[3]<-"Country"
+
+cpi_2014['Country Rank'] <- NULL
+cpi_2014['Country Code'] <- NULL
+cpi_2014['Std Error'] <- NULL
+cpi_2014['Region'] <- NULL
+cpi_2014['Number of Surveys Used'] <- NULL
+cpi_2014['Min'] <- NULL
+cpi_2014['Max'] <- NULL
+cpi_2014['90% Lower CI'] <- NULL
+cpi_2014['90% Upper CI'] <- NULL
+
+colnames(cpi_2014)[which(names(cpi_2014) == "AFDB")] <- "African Development Bank CPIA"
+colnames(cpi_2014)[which(names(cpi_2014) == "BF (BTI)")] <- "Bertelsmann Foundation Transformation Index"
+colnames(cpi_2014)[which(names(cpi_2014) == "FH")] <- "Freedom House Nations in Transit Ratings"
+colnames(cpi_2014)[which(names(cpi_2014) == "IMD")] <- "IMD World Competitiveness Yearbook"
+colnames(cpi_2014)[which(names(cpi_2014) == "WEF")] <- "World Economic Forum EOS"
+colnames(cpi_2014)[which(names(cpi_2014) == "BF (SGI)")] <- "Bertelsmann Foundation Sustainable Governance Index"
+colnames(cpi_2014)[which(names(cpi_2014) == "EIU")] <- "Economist Intelligence Unit Country Ratings"
+colnames(cpi_2014)[which(names(cpi_2014) == "GI")] <- "Global Insight Country Risk Ratings"
+colnames(cpi_2014)[which(names(cpi_2014) == "WJP")] <- "World Justice Project Rule of Law Index"
+
+colnames(cpi_2014)[which(names(cpi_2014) == "WB")] <- "World Bank CPIA"
+colnames(cpi_2014)[which(names(cpi_2014) == "ICRG")] <- "PRS International Country Risk Guide"
+colnames(cpi_2014)[which(names(cpi_2014) == "PERC")] <- "PERC Asia Risk Guide"
+
+
+#2013
+names(cpi_2013)[8]<-"CPI Score"
+names(cpi_2013)[3]<-"Country"
+
+cpi_2013['Country Rank'] <- NULL
+cpi_2013['Standard Error'] <- NULL
+cpi_2013['Country Rank...1'] <- NULL
+cpi_2013['Country Rank...6'] <- NULL
+cpi_2013['Country Code'] <- NULL
+cpi_2013['WB Code'] <- NULL
+cpi_2013['IFS Code'] <- NULL
+cpi_2013['Region'] <- NULL
+cpi_2013['Country Rank'] <- NULL
+cpi_2013['Surveys Used'] <- NULL
+cpi_2013['MIN'] <- NULL
+cpi_2013['MAX'] <- NULL
+cpi_2013['Lower'] <- NULL
+cpi_2013['Upper'] <- NULL
+
+colnames(cpi_2013)[which(names(cpi_2013) == "AFDB")] <- "African Development Bank CPIA"
+colnames(cpi_2013)[which(names(cpi_2013) == "BF (BTI)")] <- "Bertelsmann Foundation Transformation Index"
+colnames(cpi_2013)[which(names(cpi_2013) == "FH")] <- "Freedom House Nations in Transit Ratings"
+colnames(cpi_2013)[which(names(cpi_2013) == "IMD")] <- "IMD World Competitiveness Yearbook"
+colnames(cpi_2013)[which(names(cpi_2013) == "WEF")] <- "World Economic Forum EOS"
+colnames(cpi_2013)[which(names(cpi_2013) == "BF (SGI)")] <- "Bertelsmann Foundation Sustainable Governance Index"
+colnames(cpi_2013)[which(names(cpi_2013) == "EIU")] <- "Economist Intelligence Unit Country Ratings"
+colnames(cpi_2013)[which(names(cpi_2013) == "GI")] <- "Global Insight Country Risk Ratings"
+colnames(cpi_2013)[which(names(cpi_2013) == "WJP")] <- "World Justice Project Rule of Law Index"
+
+colnames(cpi_2013)[which(names(cpi_2013) == "WB")] <- "World Bank CPIA"
+colnames(cpi_2013)[which(names(cpi_2013) == "ICRG")] <- "PRS International Country Risk Guide"
+colnames(cpi_2013)[which(names(cpi_2013) == "PERC")] <- "PERC Asia Risk Guide"
+
+#2012
+names(cpi_2012)[5]<-"CPI Score"
+names(cpi_2012)[3]<-"Country"
+
+cpi_2012['WB Code'] <- NULL
+cpi_2012['Region'] <- NULL
+cpi_2012['Country Rank'] <- NULL
+cpi_2012['Standard Error'] <- NULL
+cpi_2012['...3'] <- NULL
+cpi_2012['Surveys Used'] <- NULL
+cpi_2012['MIN'] <- NULL
+cpi_2012['MAX'] <- NULL
+cpi_2012['Lower'] <- NULL
+cpi_2012['Upper'] <- NULL
+
+colnames(cpi_2012)[which(names(cpi_2012) == "AFDB")] <- "African Development Bank CPIA"
+colnames(cpi_2012)[which(names(cpi_2012) == "BF (BTI)")] <- "Bertelsmann Foundation Transformation Index"
+colnames(cpi_2012)[which(names(cpi_2012) == "FH")] <- "Freedom House Nations in Transit Ratings"
+colnames(cpi_2012)[which(names(cpi_2012) == "IMD")] <- "IMD World Competitiveness Yearbook"
+colnames(cpi_2012)[which(names(cpi_2012) == "WEF")] <- "World Economic Forum EOS"
+colnames(cpi_2012)[which(names(cpi_2012) == "BF (SGI)")] <- "Bertelsmann Foundation Sustainable Governance Index"
+colnames(cpi_2012)[which(names(cpi_2012) == "EIU")] <- "Economist Intelligence Unit Country Ratings"
+colnames(cpi_2012)[which(names(cpi_2012) == "GI")] <- "Global Insight Country Risk Ratings"
+colnames(cpi_2012)[which(names(cpi_2012) == "WJP")] <- "World Justice Project Rule of Law Index"
+
+colnames(cpi_2012)[which(names(cpi_2012) == "WB")] <- "World Bank CPIA"
+colnames(cpi_2012)[which(names(cpi_2012) == "ICRG")] <- "PRS International Country Risk Guide"
+colnames(cpi_2012)[which(names(cpi_2012) == "PERC")] <- "PERC Asia Risk Guide"
+
+```
+
+# Create one dataset with all the data
+
+```{r}
+# list sources and dataset
+sources = names(cpi_2018)
+sources <- sources[!sources %in% c('year','Country')]
+list_datasets = list('2018' = cpi_2018,
+                     '2017' = cpi_2017,
+                     '2016' = cpi_2016,
+                     '2015' = cpi_2015,
+                     '2014' = cpi_2014,
+                     '2013' = cpi_2013,
+                     '2012' = cpi_2012)
+# Empty dataframe
+table = data.frame()
+
+# Melt and append all the data in the one dataframe
+for (dataset in list_datasets){
+  if (dataset$year[1] %in% c(2015,2014,2013,2012))
+    {newsources <- sources[!sources %in% c('Varieties of Democracy Project')]}
+  else
+    {newsources <- sources}
+  for(source in newsources){
+      df <- melt(dataset[c('year','Country',source)], id=(c("year","Country")))
+      table <- rbind(table,df)
+      }
+}
+
+# Add region
+dataset<- merge(table,country_region, by  = "Country") 
+
+# Change column names
+names(dataset)[3] <- 'Source'
+names(dataset)[4] <- 'Cpi'
+
+# Save dataset in new csv file
+write.csv(dataset, here('data','cpi_across_years.csv'), row.names = FALSE)
+```
+
+
+
+
+
+
+
+
+
+
+

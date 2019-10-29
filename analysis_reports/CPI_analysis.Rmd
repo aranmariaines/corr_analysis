@@ -1,0 +1,826 @@
+---
+output:
+  html_document:
+    # Code hidden by default
+    code_folding: hide
+    
+    # style
+    highlight: espresso
+    theme: simplex
+    includes:
+      before_body: ../style/header.html
+      after_body: ../style/footer.html
+      
+    # Menu
+  #  toc: true
+  #  toc_float: 
+  #    collapsed: true
+  #    smooth_scroll: false
+      
+    # Fig size
+    fig_width: 6
+    fig_height: 4
+---
+
+## Corruption Perception Index
+
+The 2018 Corruption Perceptions Index (CPI), published by Transparency International (TI), measures the perceived levels of public sector corruption in 180 countries and territories. Drawing on 13 surveys of businesspeople and expert assessments (sources), the index scores on a scale of zero (highly corrupt) to 100 (very clean).
+
+Each source defines a Corruption Index score for each country that Transparency International normalizes to make it comparable. 
+
+### What is this analysis about?
+
+The goal of this analysis is to understand the difference in corruption perception across sources.
+
+### Data
+
+For this analysis, I used data from [Transparency International’s Corruption Perceptions Index 2018](https://www.transparency.org/cpi2018). 
+
+The 2018 CPI draws on 13 surveys and expert assessments (sources) to measure public sector corruption in 180 countries and territories, giving each a score from zero (highly corrupt) to 100 (very clean). 
+
+The table shows the CPI scored by each source for each country in 2018. Plus the average, standard deviation, minimum and maximum CPI for each country across sources.
+
+```{r,warning=FALSE,message=FALSE}
+# Import libraries
+library(readxl)
+library(tidyverse)
+library(Hmisc)
+library(knitr)
+library(here)
+library(gridExtra)
+library(plotly)
+library(magick)
+library(grid)
+library(gganimate)
+
+# Data import
+data <- read_excel(here("data","2018_CPI_FullDataSet.xlsx"), sheet = "CPI2018", skip = 2)
+data_across_years_sources <- read.csv(here('data','cpi_across_years.csv'))
+
+# Data manipulation
+# Subset ordering and data type conversion
+x = data %>% select(1,4,7,8,9)
+x <- x[order(x$`CPI Score 2018`, decreasing=FALSE),]
+x$Country <- factor(x$Country, levels = x$Country[order(x$`CPI Score 2018`, decreasing = FALSE)])
+
+# Create new variable
+x$Difference <- x$`Upper CI` - x$`Lower CI`
+
+# Top and bottom of list
+x$Country <- as.factor(x$Country)
+x.head  <- tail(x, n = 20)
+x.tail <- head(x, n = 20)
+```
+
+## Analysis
+
+### How is CPI distributed?
+
+The average CPI score across countries is 43. More than two-thirds of countries score below 50. 
+
+
+```{r,warning=FALSE,message=FALSE}
+p <- ggplot(x,aes(x=`CPI Score 2018`)) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="white")+
+ geom_density(alpha=.2, fill="#3695d8") 
+
+p + geom_vline(aes(xintercept=mean(`CPI Score 2018`)),
+            color="gold", linetype="dashed", size=1) + theme(panel.background = element_blank())
+```
+
+### Countries with highest CPI
+
+The plot shows the average, minimum and maximum CPI scores for each country.
+Denmark is the country with the highest CPI score (88) with a minimum CPI of 84 and a maximum of 92. 
+Iceland's CPI is worth noticing as its average CPI is 76 but sources have a wider range of opinions that go from 69 to 83.
+
+```{r}
+library(ggplot2)
+plot <- ggplot(x.head, aes(x=Country, y=`CPI Score 2018`)) + 
+        geom_pointrange(aes(ymin=`Lower CI`, ymax=`Upper CI`)) +
+        geom_point(color='green')+
+        ggtitle("Top 20") +
+        xlab("CPI Score 2018") + coord_flip()
+
+plot + theme(axis.ticks = element_blank(),
+             axis.title.y = element_blank(),
+             plot.title = element_text(size=14, hjust = 0.5),
+             panel.background = element_blank())
+     
+```
+
+### Countries with lowest CPI
+
+The plot shows the CPI score for each country and the minimum and maximum score assigned. 
+Somalia is the country with the lowest CPI score, its minimum CPI is 5 and its highest 15. 
+
+```{r}
+library(ggplot2)
+plot <- ggplot(x.tail, aes(x=Country, y=`CPI Score 2018`)) + 
+        geom_pointrange(aes(ymin=`Lower CI`, ymax=`Upper CI`)) +
+        ggtitle("Bottom 20") +
+        geom_point(color = 'red')+ 
+        xlab("CPI Score 2018") + coord_flip()
+
+plot + theme(axis.ticks = element_blank(),
+             axis.title.y = element_blank(),
+             plot.title = element_text(size=14, hjust = 0.5),
+             panel.background = element_blank())
+     
+```
+
+```{r fig2, fig.height = 2.5, fig.width = 6, fig.align = "center"}
+require(maps)
+
+# Get world map
+world_map <- map_data("world")
+
+# Select data from CPI 2018 to use
+data_map_plot<- data %>% select(1,4)
+names(data_map_plot)[1] <- 'region'
+
+# Check differences in Country name
+#setdiff(data_map_plot$region,world_map$region)
+
+# Normalize country names
+data_map_plot$region [data_map_plot$region  == "United Kingdom"] <- "UK"
+data_map_plot$region [data_map_plot$region  == "Hong Kong"] <- "China"
+data_map_plot$region [data_map_plot$region  == "Saint Vincent and the Grenadines"] <- "Saint Vincent"
+data_map_plot$region [data_map_plot$region  == "Trinidad and Tobago"] <- "Tobago"
+data_map_plot$region [data_map_plot$region  == "Guinea Bissau"] <- "Guinea"
+data_map_plot$region [data_map_plot$region  == "United States of America"] <- "USA"
+data_map_plot$region [data_map_plot$region  == "Cabo Verde"] <- "Cape Verde"
+data_map_plot$region [data_map_plot$region  == "Cote d'Ivoire"] <- "Ivory Coast"
+data_map_plot$region [data_map_plot$region  == "Korea, North"] <- "North Korea"
+data_map_plot$region [data_map_plot$region  == "Brunei Darussalam"] <- "Brunei"
+data_map_plot$region [data_map_plot$region  == "Korea, South"] <- "South Korea"
+data_map_plot$region [data_map_plot$region  == "Congo"] <- "Democratic Republic of the Congo"
+
+# Join geo data with CPI index
+cpi_map <- left_join(data_map_plot,world_map, by = 'region')
+
+# Plot
+ggplot(cpi_map, aes(long, lat, group = group))+
+  geom_polygon(aes(fill = `CPI Score 2018`), color = "white")+
+  ggtitle("Corruption Perception Index 2018") +
+  scale_fill_viridis_c(option = "D") +
+  theme(plot.title = element_text(size=14, hjust = 0.5),
+        panel.background = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank())
+```
+
+
+## Analysis of CPI accross sources
+### What is the country with the biggest CPI spread?
+
+Oman, Comorros and Gambia have the widest difference between its minimum and maximum score. Oman's CPI is 52 and CI scores range from 36 to 68. Comoros and Gambia both with average CPI's below 40 have a difference of 30 points between its lower and upper Corruption Index scores. 
+
+```{r}
+# Reorder dataframe based on difference
+x.difference <- x[order(x$Difference, decreasing=FALSE),]
+x.difference$Country <- factor(x.difference$Country, levels = x.difference$Country[order(x.difference$Difference, decreasing = FALSE)])
+x.difference.all <- x.difference
+x.difference <- tail(x.difference, n = 20)
+
+```
+
+```{r}
+plot <- ggplot(x.difference, aes(x=Country, y=`Difference`)) + 
+        ggtitle("Difference betwen maximum and minimum score") +
+        geom_point(color = 'orange', size = 3) +
+        geom_text(aes(label=x.difference$Difference),hjust=0, vjust=0) +
+        geom_segment( aes(x=Country, xend=Country, y=0, yend=Difference), color="grey", size=0.7)+ 
+        coord_flip()
+
+plot + theme(
+             axis.ticks = element_blank(),
+             axis.title.y = element_blank(),
+             plot.title = element_text(size=14, hjust = 0.5),
+             panel.background = element_blank()
+             )
+     
+```
+
+
+## The Oman case
+
+Oman's CPI is 52, its minimum CI score was 36 and its maximum 68. This indicates a wide different perception of this country's corruption in the public sector. 
+
+Five sources analyzed Oman, 'World Economic Forum EOS' scored it as 87, almost as 'clean' as Denmark which CPI is 88. At the same time, the 'Bertelsmann Foundation Transformation Index' scored it 21. It is 21 points below the average CPI and is like Zimbabwe and Cambodia levels of corruption.
+
+
+```{r,warning=FALSE,message=FALSE}
+oman<- data %>% filter(Country =="Oman")
+oman<-oman %>% select(10:22)
+newdf<-data.frame(t(oman))
+newdf <- cbind(Source = rownames(newdf), newdf)
+rownames(newdf) <- 1:nrow(newdf)
+colnames(newdf)[2] <- "CPI"
+oman<-newdf
+rm(newdf)
+
+plot <- ggplot(oman, aes(x=Source, y=CPI)) + 
+        ggtitle("How sources perceive Oman's corruption?") +
+        geom_point(color = 'orange', size = 5) +
+        ylab("CPI Score 2018") +  ylim(0, 100)
+
+plot + theme(plot.title = element_text(size=14, hjust = 0.5),
+             axis.title.y = element_blank(),
+             axis.ticks = element_blank(),
+             panel.background = element_blank()
+             ) + coord_flip()
+        
+```
+
+
+## On the sources
+
+### How do sources score?
+Sources around the world score a Corruption Index based on surveys and expert assessments. The aim is to measure public sector corruption in 180 countries by giving each a score that ranges from zero (highly corrupt) to 100 (very clean).   
+
+Not all sources provide scores for all countries, some specialize in certain regions. On one hand, 'Global Insight Country Risk Ratings' scored all the countries in the list and 'Varieties of Democracy Project' scored 95% of the total countries listed. On the other hand, the 'PERC Asia Risk Guide' provided scores only for 15 countries. 
+
+'Bertelsmann Foundation Sustainable Governance Index' is the source that on average assigned the highest scores (66) evaluating 41 countries in the Middle East & North Africa, Sub-Saharan Africa, Western Europe, America, Asia-Pacific y Europe and Central Asia areas. 'African Development Bank CPIA' assigned the lowest score on average (28) analyzing 38 countries in Sub-Saharan Africa region.
+
+'IMD World Competitiveness Yearbook' and 'Economist Intelligence Unit Country Ratings' distributed scores on a larger range of values compared to other sources. Both sources cover countries in all regions but 'Economist Intelligence Unit Country Ratings' analyzed twice as many countries as 'IMD World Competitiveness Yearbook'.
+
+```{r}
+# Subset data
+df.sources <- data %>% select(10:22)
+
+# Calculte min,max,avg
+colMax <- function(data) sapply(data, max, na.rm = TRUE)
+colMin<- function(data) sapply(data, min, na.rm = TRUE)
+
+max<-colMax(df.sources)
+min<-colMin(df.sources)
+avg<-colMeans(df.sources, na.rm = TRUE)
+count<-colSums(!is.na(df.sources))
+std<-sapply(df.sources, sd, na.rm = TRUE)
+
+# create dataframe
+newdf<-data.frame(as.list(avg),row.names = 'Avg')
+newdf<-rbind(newdf, data.frame(as.list(min),row.names = 'Min'))
+newdf<-rbind(newdf, data.frame(as.list(max),row.names = 'Max'))
+newdf<-rbind(newdf, data.frame(as.list(count),row.names = 'Count'))
+newdf<-rbind(newdf, data.frame(as.list(std),row.names = 'Std'))
+newdf<-data.frame(t(newdf))
+newdf <- cbind(Source = rownames(newdf), newdf)
+rownames(newdf) <- 1:nrow(newdf)
+newdf$dif_max_min <- newdf$Max - newdf$Min
+
+df.sources <- newdf
+rm(newdf)
+
+# order data
+df.sources <- df.sources[order(df.sources$Avg, decreasing=FALSE),]
+df.sources$Source <- factor(df.sources$Source, levels = df.sources$Source[order(df.sources$Avg, decreasing = FALSE)])
+```
+
+```{r}
+plot <- ggplot(df.sources, aes(x=Source, y=Avg)) + 
+        geom_pointrange(aes(ymin=Avg-Std, ymax=Avg+Std)) +
+        ggtitle("How sources assign scores?") + ylab("CPI Score 2018") +
+        geom_segment( aes(x=Source, xend=Source, y=Avg-Std, yend=Avg+Std), color=ifelse(df.sources$Source %in% c("IMD.World.Competitiveness.Yearbook","Economist.Intelligence.Unit.Country.Ratings"), "#3695d8", "grey"),      size=ifelse(df.sources$Source %in% c("IMD.World.Competitiveness.Yearbook","Economist.Intelligence.Unit.Country.Ratings"), 1.3, 0.7) ) +       geom_point(color = 'orange') 
+
+
+plot + theme(axis.title.y = element_blank(),
+             axis.ticks = element_blank(),
+             plot.title = element_text(size=14, hjust = 0.5),
+             panel.background = element_blank()
+             ) + coord_flip()
+```
+
+## Corruption perception differences across sources
+
+For each pair of country and source, the absolute difference between a country's CPI and CI score assigned by the source was calculated. Then, the differences were sum up for each source divided by countries analyzed. 
+The largest the indicator the biggest the difference in corruption perception between that source and the average. 
+
+'World Economic Forum EOS' is the source with the biggest difference in corruption perception compared to the average. 
+Followed by 'Varieties of Democracy Project'.
+
+```{r}
+# Subset dataset
+df.sources.differences <- data %>% select(1,4,10:22)
+df.sources.differences2 <- df.sources.differences
+
+# Calculating the difference between CPI and each CI for each country and source
+c <- df.sources.differences2$`CPI Score 2018`
+df.sources.differences2[,3:15] <- (apply(df.sources.differences2[,3:15], 2, function(x) abs(x-c)))
+sum.differences.abs <- colSums(df.sources.differences2[,3:15], na.rm = TRUE)
+sum.differences.abs <- as.data.frame(sum.differences.abs)
+newdf <- cbind(Source = rownames(sum.differences.abs), sum.differences.abs)
+rownames(newdf) <- 1:nrow(newdf)
+colnames(newdf)[2] <- "Sum_of_distance_to_CPI"
+sum.differences.abs<-newdf
+rm(newdf)
+
+# Dividing total difference of each source for total countries analyzed by it. 
+source.count <- df.sources %>% select(1,5)
+source.count$Source <- as.character(source.count$Source)
+sum.differences.abs$Source <- as.character(sum.differences.abs$Source)
+sum.differences.abs$Source <- gsub('\\s+', '.', sum.differences.abs$Source)
+
+sum.differences.abs <- sum.differences.abs %>% mutate(Source= trimws(as.character(Source)))
+source.count <- source.count %>% mutate(Source = trimws(as.character(Source)))
+sum.differences.abs.count <- left_join(source.count,sum.differences.abs, by = c('Source'))
+
+sum.differences.abs.count$Unit_difference <-sum.differences.abs.count$Sum_of_distance_to_CPI / sum.differences.abs.count$Count
+
+# Order data
+sum.differences.abs.count <- sum.differences.abs.count[order(sum.differences.abs.count$Unit_difference, decreasing=FALSE),]
+sum.differences.abs.count$Source <- factor(sum.differences.abs.count$Source, levels = sum.differences.abs.count$Source[order(sum.differences.abs.count$Unit_difference, decreasing = FALSE)])
+
+```
+
+```{r}
+plot <- ggplot(sum.differences.abs.count, aes(x=Source, y=Unit_difference)) + 
+        ggtitle("Corruption perception differences") + ylab("Difference score") +
+        geom_point(color = 'orange', size = 5) +  coord_flip()
+
+plot + theme(plot.title = element_text(size=14, hjust = 0.5),
+             axis.title.y = element_blank(),
+             panel.background = element_blank(),
+             axis.ticks = element_blank()
+             ) 
+```
+## oman in years
+```{r,warning=FALSE,message=FALSE}
+
+plotting.cases <- function (dataset,country){
+  data_to_plot <- data_across_years_sources %>% filter(Country == country)
+  data_to_plot$Type <- ifelse(data_to_plot$Source=='CPI Score', '1','0')
+  
+  p <-ggplot(data=data_to_plot, aes(x=year, y=Cpi, group = Source, color = Source, linetype=Type)) +
+        geom_line(size = 2) +
+        ggtitle(toString(country)) +
+        xlab('Year') +
+        ylab('CPI') +
+        ylim(c(0,100)) +
+        scale_fill_brewer(palette="Paired") 
+        #scale_colour_manual(values=cbbPalette)
+    
+  p <- p + theme(panel.background = element_blank(),
+              plot.title = element_text(hjust = 0.5, size = 12, color = 'black'),
+              legend.position = "none",
+              text=element_text(size=10, color = 'darkgray'),
+              axis.ticks = element_blank())
+  p
+}
+
+# plots
+p_oman <- plotting.cases(data_across_years_sources,'Oman')
+p_guyana <- plotting.cases(data_across_years_sources,'Guyana')
+grid.arrange(p_oman,p_guyana, ncol = 2)
+```
+
+## Scatter plot
+
+```{r}
+x.difference.all <- merge(x.difference.all,data %>% select(1,3), by = 'Country') 
+
+p <-ggplot(data=x.difference.all, aes(x=Difference, y=`CPI Score 2018`, color = Region)) +
+        geom_point(size = 2) +
+        ggtitle('scatter') +
+        xlab('Difference') +
+        ylab('CPI 2018') +
+        ylim(c(0,100)) 
+        #scale_fill_brewer(palette="Paired") 
+        #scale_colour_manual(values=cbbPalette)
+    
+  p <- p + theme(panel.background = element_blank(),
+              plot.title = element_text(hjust = 0.5, size = 12, color = 'black'),
+              #legend.position = "none",
+              text=element_text(size=10, color = 'darkgray'),
+              axis.ticks = element_blank())
+  gg <- ggplotly(p)
+  #gg <- style(gg, hoverinfo = 'Source', traces = 1)
+  gg
+```
+
+
+
+## Diferences across years and sources
+
+```{r}
+# Quartiles
+x$ventile <- ntile(desc(x$`CPI Score 2018`), 20)
+x$decile <- ntile(desc(x$`CPI Score 2018`), 10)
+
+data_across_years_sources <- merge(data_across_years_sources,x%>% select(1,7,8), by="Country")
+rm(x)
+
+```
+
+```{r,warning=FALSE,message=FALSE}
+# Color Blind palette
+cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+
+# Function to plot 
+plotting <- function(dataset,source){
+  data_to_plot<- dataset %>% filter(Source == source)
+
+  p <-ggplot(data=data_to_plot, aes(x=year, y=Cpi, group = Country, color = factor(ventile))) +
+      geom_line(size=0.3) +
+      ggtitle(toString(source)) +
+      xlab('Year') +
+      ylab('CPI') +
+      ylim(c(0,100)) 
+      #scale_fill_brewer(palette="Paired")
+      #scale_colour_manual(values=cbbPalette)
+  
+  p <- p + theme(panel.background = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 5, color = 'black'),
+            legend.position = "none",
+            text=element_text(size=4, color = 'darkgray'),
+            axis.ticks = element_blank())
+  
+#  gg <- ggplotly(p)
+  
+  #gg <- style(gg, hoverinfo = 'Source', traces = 1)
+  
+#  gg
+  
+}
+
+# Vector of sources
+sources <- pull(unique(data_across_years_sources['Source']), Source)
+
+# Generate plots
+i<-0
+plots <- list()
+for (source in sources){
+  i<-i+1
+  name <- paste('p_',i, sep = '')
+  assign(name, plotting(data_across_years_sources,source))
+  plots <- append(plots,name)
+}
+
+# Plots
+grid.arrange(p_1,p_2,p_3,p_4,p_5,p_6,p_7,p_8,p_9,p_10,p_11,p_12,p_13,p_14, ncol = 5)
+#grid.arrange(p_1,p_2, ncol = 2)
+#subplot(p_1,p_2,p_3,p_4,p_5,p_6,p_7,p_8,p_9,p_10,p_11,p_12,p_13,p_14, nrows=3)
+
+title=textGrob("All the countries", gp=gpar(fontsize=8))
+grid <- grid.arrange(p_1,p_2,p_3,p_4,p_5,p_6,p_7,p_8,p_9,p_10,p_11,p_12,p_13,p_14, 
+                     ncol = 5,
+                     top=title)
+ggsave("../style/all_countries_all_sources.png" , grid)
+
+```
+
+```{r}
+
+df <- aggregate(data_across_years_sources[,4], 
+                list(Region = data_across_years_sources$Region, year = data_across_years_sources$year), 
+                na.rm=TRUE,
+                mean)
+
+df.sd <- aggregate(data_across_years_sources[,4], 
+                list(Region = data_across_years_sources$Region, year = data_across_years_sources$year), 
+                na.rm=TRUE,
+                sd)
+
+names(df)[3] <- 'Cpi'
+```
+
+
+
+
+```{r,warning=FALSE,message=FALSE}
+# Color Blind palette
+cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+
+# Function to plot 
+plotting <- function(dataset,source,ventile_number1,ventile_number2){
+  data_to_plot<- dataset %>% filter(Source == source & ventile %in% c(ventile_number1,ventile_number2))
+
+  
+  p <-ggplot(data=data_to_plot, aes(x=year, y=Cpi, group = Country, color = Country)) +
+      geom_line(size=0.3) +
+      ggtitle(toString(source)) +
+      xlab('Year') +
+      ylab('CPI') +
+      ylim(c(0,100)) 
+      scale_colour_manual(values=cbbPalette)
+      
+  p <- p + theme(panel.background = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 5, color = 'black'),
+            legend.position = "none",
+            text=element_text(size=4, color = 'darkgray'),
+            axis.ticks = element_blank())
+}
+
+# Vector of sources
+sources <- pull(unique(data_across_years_sources['Source']), Source)
+
+# Generate plots
+i<-0
+plots <- list()
+for (source in sources){
+  i<-i+1
+  name <- paste('p_',i, sep = '')
+  assign(name, plotting(dataset = data_across_years_sources, source = source, ventile_number1 = 1,ventile_number2 = 2))
+  plots <- append(plots,name)
+}
+
+# Plots
+title=textGrob("Countries in top, middle and bottom of the ranking", gp=gpar(fontsize=8))
+grid <- grid.arrange(p_1,p_2,p_3,p_4,p_5,p_6,p_7,p_8,p_9,p_10,p_11,p_12,p_13,p_14, 
+                     ncol = 5,
+                     top=title)
+ggsave("../style/ventile_1.png" , grid)
+```
+
+```{r,warning=FALSE,message=FALSE}
+# Generate plots
+i<-0
+plots <- list()
+for (source in sources){
+  i<-i+1
+  name <- paste('p_',i, sep = '')
+  assign(name, plotting(dataset = data_across_years_sources, source = source, ventile_number1 = 19,ventile_number2 = 20))
+  plots <- append(plots,name)
+}
+
+# Plots
+title=textGrob("Countries in top, middle and bottom of the ranking", gp=gpar(fontsize=8))
+grid <- grid.arrange(p_1,p_2,p_3,p_4,p_5,p_6,p_7,p_8,p_9,p_10,p_11,p_12,p_13,p_14, 
+                     ncol = 5,
+                     top=title)
+ggsave("ventile_20.png" , grid)
+```
+
+
+```{r,warning=FALSE,message=FALSE}
+
+# Generate plots
+i<-0
+plots <- list()
+for (source in sources){
+  i<-i+1
+  name <- paste('p_',i, sep = '')
+  assign(name, plotting(dataset = data_across_years_sources, source = source, ventile_number1 = 10,ventile_number2 = 11))
+  plots <- append(plots,name)
+}
+
+# Plots
+title=textGrob("Countries in top, middle and bottom of the ranking", gp=gpar(fontsize=8))
+grid <- grid.arrange(p_1,p_2,p_3,p_4,p_5,p_6,p_7,p_8,p_9,p_10,p_11,p_12,p_13,p_14, 
+                     ncol = 5,
+                     top=title)
+ggsave("ventile_10.png" , grid)
+```
+
+```{r}
+# Make a GIF
+
+#png.files <- c(here('style','ventile_01.png'),here('style','ventile_10.png'))
+png.files <- c('../style/ventile_1.png','../style/ventile_10.png','../style/ventile_20.png')
+GIF.convert <- function(x, output = "../style/animation2.gif")
+  #Create a function to read, animate and convert the files to gif
+        {
+        image_read(x) %>%
+        image_animate(fps = 0.5) %>%
+        image_write(output)
+        }
+
+GIF.convert(png.files)
+```
+
+## Only CPI evolution - decile
+
+
+```{r,warning=FALSE,message=FALSE}
+# Color Blind palette
+cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+# Function to plot 
+plotting <- function(dataset,source){
+  data_to_plot<- dataset %>% filter(Source == source)
+
+  p <-ggplot(data=data_to_plot, aes(x=year, y=Cpi, group = Country, color = factor(decile))) +
+      geom_line(size=1) +
+      ggtitle(toString(source)) +
+      xlab('Year') +
+      ylab('CPI') +
+      ylim(c(0,100)) 
+      #scale_fill_brewer(palette="Paired")
+      #scale_colour_manual(values=cbbPalette)
+  
+  p <- p + theme(panel.background = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 16, color = 'black'),
+            legend.position = "none",
+            text=element_text(size=12, color = 'darkgray'),
+            axis.ticks = element_blank())
+  p + transition_reveal(year)
+  
+#  gg <- ggplotly(p)
+  
+  #gg <- style(gg, hoverinfo = 'Source', traces = 1)
+  
+#  gg
+  
+}
+
+# Vector of sources
+sources <- pull(unique(data_across_years_sources['Source']), Source)
+
+
+
+# Generate plot 
+plot_cpi_evolution <- plotting(data_across_years_sources,'CPI Score')
+plot_cpi_evolution
+
+# Plot
+#ggsave("../style/all_countries_all_sources.png" , grid)
+```
+
+```{r}
+# Reorder dataframe based on difference
+x.difference <- x[order(x$Difference, decreasing=FALSE),]
+x.difference$Country <- factor(x.difference$Country, levels = x.difference$Country[order(x.difference$Difference, decreasing = FALSE)])
+x.difference.all <- x.difference
+x.difference <- tail(x.difference, n = 20)
+
+x.difference.all <- merge(x.difference.all,data %>% select(1,3), by = 'Country') 
+
+p <-ggplot(data=x.difference.all, aes(x=`Standard error`, y=`CPI Score 2018`, color = Country)) +
+        geom_point(size = 2) +
+        ggtitle('Score differences across sources') +
+        xlab('Standard Error') +
+        ylab('CPI 2018') 
+        
+    
+  p <- p + theme(panel.background = element_blank(),
+              plot.title = element_text(hjust = 0.5, size = 12, color = 'black'),
+              legend.position = "none",
+              text=element_text(size=10, color = 'darkgray'),
+              axis.ticks = element_blank())
+  gg <- ggplotly(p, tooltip = c("Country","Cpi"))
+  gg
+```
+
+
+```{r}
+# Quartiles
+x$ventile <- ntile(desc(x$`CPI Score 2018`), 20)
+x$decile <- ntile(desc(x$`CPI Score 2018`), 10)
+x$quartile <- ntile(desc(x$`CPI Score 2018`), 4)
+
+data_across_years_sources <- merge(data_across_years_sources,x%>% select(1,8,9,10), by="Country")
+```
+
+
+```{r fig322, fig.height = 4, fig.width = 6, fig.align = "center", warning=FALSE, message=FALSE}
+
+# Function to plot 
+plotting <- function(dataset,source){
+  data_to_plot<- dataset %>% filter(Source == source)
+
+  p <-ggplot(data=data_to_plot, aes(x=year, y=Cpi, group = Country, color = 'black')) +
+      geom_line(size=0.6, alpha=0.5) +
+      ggtitle(toString(source)) +
+      xlab('Year') +
+      ylab('CPI') +
+      ylim(c(0,100)) +
+      labs(color = 'Ranking \n position')+
+      ggtitle("Evolution of CPI per country")
+  
+  p <- p + theme(legend.position = "bottom",
+            legend.direction = "horizontal",
+            panel.background = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 10, color = 'black'),
+            legend.text=element_text(size=8),
+            legend.title = element_text(colour="black", size=8),
+            text=element_text(size=8, color = 'black'),
+            axis.ticks = element_blank())
+  
+  gg <- ggplotly(p, tooltip = c("Country","Cpi")) 
+  
+  gg
+}
+
+# Vector of sources
+sources <- pull(unique(data_across_years_sources['Source']), Source)
+
+# Generate plot 
+plot_cpi_evolution <- plotting(data_across_years_sources,'CPI Score')
+plot_cpi_evolution
+
+#animate(plot_cpi_evolution, fps = 5, width = 800, height = 400)
+
+# Plot
+#  anim_save("election.gif", p)
+#ggsave("../style/all_countries_all_sources.png" , grid)
+```
+
+
+
+```{r}
+# Reorder dataframe based on difference
+x.difference <- x[order(x$`Standard error`, decreasing=FALSE),]
+x.difference$Country <- factor(x.difference$Country, levels = x.difference$Country[order(x.difference$`Standard error`, decreasing = FALSE)])
+x.difference.all <- x.difference
+
+#x.difference.all <- merge(x.difference.all,data %>% select(1,3), by = 'Country') 
+x.difference.all.tail <- tail(x.difference.all,30)
+
+p <-ggplot(data=x.difference.all.tail, aes(x=`CPI Score 2018`, y=1, color = Country)) +
+        geom_point(aes(size = `Standard error`)) +
+        ggtitle('Score differences across sources') +
+        xlab('Standard Error') +
+        ylab('CPI 2018') +
+        ylim(c(1,1))
+    
+  p <- p + theme(panel.background = element_blank(),
+              plot.title = element_text(hjust = 0.5, size = 12, color = 'black'),
+              legend.position = "none",
+              text=element_text(size=10, color = 'darkgray'),
+              axis.ticks = element_blank())
+  gg <- ggplotly(p, tooltip = c("Country"))
+  gg
+```
+
+
+```{r fig4, fig.height = 18, fig.width = 6, fig.align = "center",warning=FALSE,message=FALSE}
+plot <- ggplot(x, aes(x=Country, y=30, label = `CPI Score 2018`)) + 
+        geom_pointrange(aes(ymin=30 - `Standard error`, ymax=30+`Standard error`), color = 'darkorange') +
+        geom_point(color='darkblue', size = 6) +
+        geom_text(aes(label = `CPI Score 2018`), hjust = 0.5, vjust = 0.5, color = 'white', size = 3, face= 'bold') +
+        ggtitle("CPI and Standard error") +
+        xlab("CPI Score 2018") + 
+        coord_flip() + 
+        theme(axis.ticks = element_blank(),
+             axis.text.x = element_blank(),
+             axis.title.x = element_blank(),
+             axis.title.y = element_blank(),
+             axis.text = element_text(size = 14),
+             plot.title = element_text(size=14, hjust = 0.5),
+             panel.background = element_blank())
+
+plot
+
+```
+
+## Conclusion
+
+Transparency International (TI) reported the Corruption Perceptions Index (CPI) 2018. It measures the perceived levels of public sector corruption in 180 countries and territories. The index scores on a scale of zero (highly corrupt) to 100 (very clean). It is build based on experts from different sources. 
+
+The data of the CPI and Corruption Index scored by each source for each country is available on their website. This information leads to these key findings:
+
+- Top-ranked countries are Denmark, New Zealand and Switzerland. The countries that are perceived as the most corrupt ones are Somalia, South Sudan and Syria.
+
+- The average CPI across countries is 43. More than two-thirds of countries score below 50. 
+
+- There is some extreme difference in the perception of corruption between sources. One example is Oman, the country with the largest difference between its minimum and maxim Corruption Index. This means that for a source its level of corruption in the public sector is similar to Denmark whereas for another source it is comparable to Zimbabwe or Cambodia. 
+
+- A measure was built to check how different the scores are across sources. 'World Economic Forum EOS' is the source with the largest difference between its scores and the average CPI scores. 
+
+$~$
+
+
+# Data Sonification
+```{r}
+library(sonify)
+oman.cc <- oman[complete.cases(oman), ]
+oman.cc$CPI <- as.double(oman.cc$CPI)
+oman.cc <- oman.cc[order(oman.cc$CPI),]
+obj = sonify(x=t(oman.cc['CPI']), duration=2, play=TRUE, waveform= 'triangle')
+```
+
+```{r,warning=FALSE,message=FALSE}
+denmark<- data %>% filter(Country =="Denmark")
+denmark<-denmark %>% select(10:22)
+newdf<-data.frame(t(denmark))
+newdf <- cbind(Source = rownames(newdf), newdf)
+rownames(newdf) <- 1:nrow(newdf)
+colnames(newdf)[2] <- "CPI"
+denmark<-newdf
+rm(newdf)
+
+plot <- ggplot(denmark, aes(x=Source, y=CPI)) + 
+        ggtitle("How sources perceive Denmark's corruption?") +
+        geom_point(color = 'orange', size = 5) +
+        ylab("CPI Score 2018") + ylim(0, 100)
+
+plot + theme(plot.title = element_text(size=14, hjust = 0.5),
+             axis.title.y = element_blank(),
+             axis.ticks = element_blank(),
+             panel.background = element_blank()
+             ) + coord_flip()
+        
+```
+
+```{r}
+denmark.cc <- denmark[complete.cases(denmark), ]
+denmark.cc$CPI <- as.double(denmark.cc$CPI)
+denmark.cc <- denmark.cc[order(denmark.cc$CPI),]
+obj = sonify(x=t(denmark.cc['CPI']), duration=2, play=TRUE, waveform= 'triangle')
+```
+
+

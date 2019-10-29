@@ -1,0 +1,242 @@
+---
+output:
+  html_document:
+    # Code hidden by default
+    code_folding: hide
+    
+    # style
+    highlight: espresso
+    theme: simplex
+    includes:
+      before_body: ../style/header.html
+      after_body: ../style/footer.html
+      
+    # Fig size
+    fig_width: 6
+    fig_height: 4
+---
+
+[Transparency International](https://www.transparency.org/) is the leading non-profit fighter against corruption. Every year it publishes the [Corruption Perception Index (CPI)](https://www.transparency.org/research/cpi/overview).
+
+This index is a famous tool to report each country’s performance on corruption. Every time it is published, it immediately drives media attention and helps to put corruption problems back on the agenda. But what the index for each country actually means?
+
+The corruption perception index is a score that indicates how corruption in the public sector is perceived in every country. The 2018 edition includes data for 180 countries, each of them getting a score from 0 to 100. The higher the score, the less corrupt the country is.
+
+
+```{r warning=FALSE,message=FALSE}
+
+# Import libraries
+library(readxl)
+library(tidyverse)
+library(Hmisc)
+library(knitr)
+library(here)
+library(gridExtra)
+library(plotly)
+library(magick)
+require(maps)
+library(grid)
+library(gganimate)
+#library(extrafont)
+#loadfonts('Helvetica Neue')
+library(directlabels)
+library(stringr)
+
+# Data import
+data <- read_excel(here("data","2018_CPI_FullDataSet.xlsx"), sheet = "CPI2018", skip = 2)
+data_across_years_sources <- read.csv(here('data','cpi_across_years.csv'))
+
+# Data manipulation
+# Subset ordering and data type conversion
+x = data %>% select(1,4,6,7,8,9)
+x <- x[order(x$`CPI Score 2018`, decreasing=FALSE),]
+x$Country <- factor(x$Country, levels = x$Country[order(x$`CPI Score 2018`, decreasing = FALSE)])
+
+# Create new variable
+x$Difference <- x$`Upper CI` - x$`Lower CI`
+
+# Country as factor
+x$Country <- as.factor(x$Country)
+
+# Delete rows with score = 0 as it is actually Null
+data_across_years_sources <- subset(data_across_years_sources, Cpi!=0)
+
+# Shorter label for sources
+data_across_years_sources$source_label [data_across_years_sources$Source  == "World Economic Forum EOS"] <- "Source 1"
+data_across_years_sources$source_label [data_across_years_sources$Source  == "Global Insight Country Risk Ratings"] <- "Source 2"
+data_across_years_sources$source_label [data_across_years_sources$Source  == "CPI Score"] <- "CPI"
+data_across_years_sources$source_label [data_across_years_sources$Source  == "PRS International Country Risk Guide"] <- "Source 3"
+data_across_years_sources$source_label [data_across_years_sources$Source  == "Economist Intelligence Unit Country Ratings"] <- "Source 4"
+data_across_years_sources$source_label [data_across_years_sources$Source  == "Bertelsmann Foundation Transformation Index"] <- "Source 5"
+data_across_years_sources$source_label [data_across_years_sources$Source  == "World Bank CPIA"] <- "Source 6"
+data_across_years_sources$source_label [data_across_years_sources$Source  == "World Justice Project Rule of Law Index "] <- "Source 7"
+data_across_years_sources$source_label [data_across_years_sources$Source  == "Freedom House Nations in Transit Ratings "] <- "Source 8"
+data_across_years_sources$source_label [data_across_years_sources$Source  == " African Development Bank CPIA"] <- "Source 9"
+data_across_years_sources$source_label [data_across_years_sources$Source  == "Bertelsmann Foundation Sustainable Governance Index"] <- "Source 10"
+data_across_years_sources$source_label [data_across_years_sources$Source  == "Varieties of Democracy Project"] <- "Source 11"
+data_across_years_sources$source_label [data_across_years_sources$Source  == "IMD World Competitiveness Yearbook"] <- "Source 12"
+data_across_years_sources$source_label [data_across_years_sources$Source  == "PERC Asia Risk Guide"] <- "Source 13"
+data_across_years_sources$source_label [data_across_years_sources$Source  == "World Justice Project Rule of Law Index"] <- "Source 14"
+
+
+### Map ###
+
+# Get world map
+world_map <- map_data("world")
+
+# Select data from CPI 2018 to use
+data_map_plot<- data %>% select(1,4,6)
+names(data_map_plot)[1] <- 'region'
+
+# Check differences in Country name
+#setdiff(data_map_plot$region,world_map$region)
+
+# Normalize country names
+data_map_plot$region [data_map_plot$region  == "United Kingdom"] <- "UK"
+data_map_plot$region [data_map_plot$region  == "Hong Kong"] <- "China"
+data_map_plot$region [data_map_plot$region  == "Saint Vincent and the Grenadines"] <- "Saint Vincent"
+data_map_plot$region [data_map_plot$region  == "Trinidad and Tobago"] <- "Tobago"
+data_map_plot$region [data_map_plot$region  == "Guinea Bissau"] <- "Guinea"
+data_map_plot$region [data_map_plot$region  == "United States of America"] <- "USA"
+data_map_plot$region [data_map_plot$region  == "Cabo Verde"] <- "Cape Verde"
+data_map_plot$region [data_map_plot$region  == "Cote d'Ivoire"] <- "Ivory Coast"
+data_map_plot$region [data_map_plot$region  == "Korea, North"] <- "North Korea"
+data_map_plot$region [data_map_plot$region  == "Brunei Darussalam"] <- "Brunei"
+data_map_plot$region [data_map_plot$region  == "Korea, South"] <- "South Korea"
+data_map_plot$region [data_map_plot$region  == "Congo"] <- "Democratic Republic of the Congo"
+
+# Join geo data with CPI index
+cpi_map <- left_join(data_map_plot,world_map, by = 'region')
+
+```
+
+```{r fig1, fig.height = 3, fig.width = 6.5, fig.align = "center",warning=FALSE,message=FALSE}
+# Plot Map
+ggplot(cpi_map, aes(long, lat, group = group))+
+  geom_polygon(aes(fill = `CPI Score 2018`), color = "white")+
+  ggtitle("Corruption Perception Index 2018") +
+  scale_fill_viridis_c(option = "D") +
+  theme(text = element_text(family = 'Helvetica Neue', size = 10),
+        plot.title = element_text(size=14, hjust = 0.5),
+        panel.background = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank())
+```
+
+In 2018 the least corrupt countries were Denmark (88), New Zealand (87) and Finland (85). On the bottom of the ranking, Somalia(10), South Sudan(13) and Syria(13) performed the worst. This implies that a lot of job needs to be done to fight corruption in the public sector. 
+
+
+Transparency International has published this index since 1995. It is based on scores from other organizations such as World Bank CPIA, Global Insight Country Risk Ratings, and IMD World Competitiveness Year Book. These institutions develop corruption indexes and TI normalizes them so that there is one single score for each country.
+
+
+## The Oman case
+
+Although there is one single number that represents corruption perception for each country, the sources can have very different ideas on a country's level of corruption. Let's take Oman as en example, its CPI score for 2018 was 52 but it hides very wide believes on its corruption levels. 'World Economic Forum EOS' scored it as 87, almost as good as Denmark (88). At the same time, the 'Bertelsmann Foundation Transformation Index' assigned a score of 21, a similar corruption level to Zimbabwe and Cambodia.
+
+
+The plot of the scores assigned to Oman across years shows that sources have never coincided on which the real levels of corruption is.
+
+```{r fig2, fig.height = 3, fig.width = 5, fig.align = "center", warning=FALSE,message=FALSE}
+plotting.cases <- function (dataset,country, Color){
+  data_to_plot <- data_across_years_sources %>% filter(Country == country)
+  data_to_plot$Type <- ifelse(data_to_plot$Source=='CPI Score', '1','0')
+  
+  p <-ggplot(data=data_to_plot, aes(x=year, y=Cpi, color = Source, group = Source, linetype=Type)) +
+        geom_line(size=0.6, alpha=0.8)+
+        ylab('CPI') +
+        ylim(c(0,100)) +
+        xlim(c(2012,2020)) + 
+        labs(title = 'Oman', subtitle = 'Evolution of CPI and scores across sources',caption = 'Evolution of scores \n Plot by @mariainesaran') 
+  
+      
+  p <- p + theme(panel.background = element_blank(),
+              plot.title = element_text(hjust = 0.5, size = 14, color = 'black',family = 'Helvetica Neue'),
+              plot.subtitle = element_text(hjust = 0.5, size = 12, color = 'black',family = 'Helvetica Neue'),
+              legend.position = "none",
+              text = element_text(family = 'Helvetica Neue',size=10, color = 'black'),
+              axis.ticks = element_blank(),
+              legend.title = element_blank(),
+              axis.title.x = element_blank()) +
+              
+          # animation
+            transition_reveal(year) +
+            geom_dl(aes(label= str_wrap(source_label, width = 30), size = 1, alpha = 0.8, family = 'Helvetica Neue'), method = ("last.points"))+
+            ease_aes('linear') # animation speed
+
+  animate(p, fps = 10, end_pause = 0)
+}
+
+# plots
+p_oman <- plotting.cases(data_across_years_sources,'Oman',"#D55E00")
+p_oman
+```
+
+
+##Is CPI a meaningful score for all countries? 
+
+There are some countries which index hides the wide opinions between sources. In these cases, the CPI score represents the perception differences rather than a measure of corruption level.
+
+
+The plot shows all the CPI scores with the discrepancy on levels of corruption between sources. The highest the differences the least reliable the CPI is for reflecting actual corruption.  
+
+```{r}
+# Reorder dataframe based on difference
+x.difference <- merge(x, data %>% select(1,3), by = 'Country')
+x.difference <- x.difference[order(x.difference$`CPI Score 2018`, decreasing=TRUE),]
+x.difference$Country <- factor(x.difference$Country, levels = x.difference$Country[order(x.difference$`CPI Score 2018`, decreasing = TRUE)])
+x.difference.all <- x.difference
+
+```
+
+
+```{r fig3, fig.height = 1, fig.width = 4, fig.align = "center",warning=FALSE,message=FALSE}
+plot_cpi_sd <- function(dataset,region){
+  dataset <- x.difference.all %>% filter(Region == region)
+  p <- ggplot(data=dataset, 
+              aes(y = 1, 
+                  x = Country, 
+                  label = `CPI Score 2018`)) +
+              geom_point(aes(color = `Standard error`), size = 7) +
+              scale_color_gradient(high = 'lightgrey', low = 'darkblue') +
+              geom_text(aes(label = `CPI Score 2018`), hjust = 0.5, vjust = 0.5, color = 'white', size = 3, face = 'bold') +
+              ggtitle(region)
+              
+    p <- p + theme(panel.background = element_blank(),
+                plot.title = element_text(hjust = 0.5, size = 10, color = 'black'),
+                legend.position = "none",
+                text=element_text(size=10, family = 'Helvetica Neue', color = 'black'),
+                axis.ticks = element_blank(),
+                axis.text.x = element_text(angle = 90),
+                axis.text.y = element_blank(),
+                axis.title.y = element_blank(),
+                axis.title.x = element_blank())
+    p}
+
+```
+
+
+```{r fig4, fig.height = 14, fig.width = 10, fig.align = "center",warning=FALSE,message=FALSE}
+regions = unique(x.difference.all$Region)
+
+for (region in regions){
+  name = paste('plot_',region,sep='')
+  assign(name,plot_cpi_sd(x.difference.all,region))
+}
+
+grid.arrange(plot_AME,plot_AP,plot_ECA,plot_MENA,plot_SSA, ncol = 1)
+```
+
+
+## Conclusion
+
+Transparency International (TI) reported the Corruption Perceptions Index (CPI) 2018. It measures the perceived levels of public sector corruption in 180 countries and territories. The index scores on a scale of zero (highly corrupt) to 100 (very clean). It is built based on experts from different sources. 
+
+
+- Top-ranked countries are Denmark, New Zealand and Switzerland. The most corrupt countries are Somalia, South Sudan and Syria.
+
+
+- The index normalizes several institution's corruption scores. There can be large differences in the perception of corruption between sources. One example is Oman, the country with the largest difference opinions between sources. This means that for an institution its level of corruption in the public sector is similar to Denmark whereas for another it is like Zimbabwe or Cambodia. 
+
+
+- Corruption Perception Index is a useful tool for hitting the headlines and helps to keep the corruption problems on the agenda. Nevertheless, a deeper understanding of its composition is important to decide how representative the index for any given country is.
