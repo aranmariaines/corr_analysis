@@ -3,7 +3,7 @@
 
 The Corruption Perceptions Index (CPI) is an index published annually by Transparency International which ranks countries by their perceived levels of public sector corruption, as determined by expert assessments and opinion surveys.
 
-I analyzed the index and its composition. [Clik here for full report!](https://nakanotokyo.github.io/corr_analysis/CPI_Perception_Differences.html)
+I analyzed the index and its composition. [Clik here for full report!](https://aranmariaines.github.io/corr_analysis/CPI_Perception_Differences.html)
 
 # Repository structure
 
